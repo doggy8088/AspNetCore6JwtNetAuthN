@@ -16,6 +16,9 @@ builder.Services.AddOptions<JwtSettingsOptions>("JwtSettings");
 builder.Services.AddSingleton<JwtHelpers>();
 builder.Services.AddSingleton<IAlgorithmFactory>(new DelegateAlgorithmFactory(new HMACSHA256Algorithm()));
 
+builder.Services.AddSingleton<IIdentityFactory, CustomIdentityFactory>();
+// builder.Services.AddSingleton<ITicketFactory, CustomTicketFactory>();
+
 builder.Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = JwtAuthenticationDefaults.AuthenticationScheme;
@@ -23,6 +26,7 @@ builder.Services.AddAuthentication(options =>
     })
     .AddJwt(options =>
     {
+        options.PayloadType = typeof(Dictionary<string, object>);
         options.Keys = new string[] { builder.Configuration.GetValue<string>("JwtSettings:SignKey") };
         options.VerifySignature = true;
     });
@@ -100,6 +104,13 @@ app.MapGet("/username", (ClaimsPrincipal user) =>
     .WithName("Username")
     .RequireAuthorization();
 
+app.MapGet("/isInRole", (ClaimsPrincipal user, string name) =>
+    {
+        return Results.Ok(user.IsInRole(name));
+    })
+    .WithName("IsInRole")
+    .RequireAuthorization();
+
 app.MapGet("/jwtid", (ClaimsPrincipal user) =>
     {
         return Results.Ok(user.Claims.FirstOrDefault(p => p.Type == "jti")?.Value);
@@ -163,6 +174,7 @@ public class JwtHelpers
                         .AddClaim("nbf", DateTimeOffset.UtcNow.ToUnixTimeSeconds())
                         .AddClaim("iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds())
                         // .AddClaim("roles", new string[] { "Admin", "Users" })
+                        .AddClaim(ClaimTypes.Role, new string[] { "Admin", "Users" })
                         .AddClaim(ClaimTypes.Name, userName)
                         .Encode();
         return token;
